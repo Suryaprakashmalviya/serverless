@@ -1,0 +1,29 @@
+service: evolus-user-service
+
+provider: 
+  name: aws
+  runtime: nodejs24.x
+  region: us-east-1
+  environment:
+    NODE_ENV: local
+  iam:
+    role:
+      statements:
+       - Effect: 'Allow'
+         Action:
+          - 'logs:CreateLogGroup'
+          - 'logs:CreateLogStream'
+          - 'logs:PutLogEvents'
+         Resource: '*'
+
+
+functions:
+  api:
+    handler: dist/lambda.handler
+    events:
+     - http:
+         method: any
+         path: /{proxy+}
+
+plugins:
+ - serverless-offline
