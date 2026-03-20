@@ -2,20 +2,26 @@ service: evolus-user-service
 
 provider: 
   name: aws
-  runtime: nodejs24.x
+  runtime: nodejs20.x
   region: us-east-1
   environment:
     NODE_ENV: local
+    DYNAMODB_TABLE: EvolusTable
   iam:
     role:
       statements:
        - Effect: 'Allow'
          Action:
+          - dynamodb:Query
+          - dynamodb:Scan
+          - dynamodb:GetItem
+          - dynamodb:PutItem
+          - dynamodb:UpdateItem
+          - dynamodb:DeleteItem
           - 'logs:CreateLogGroup'
           - 'logs:CreateLogStream'
           - 'logs:PutLogEvents'
-         Resource: '*'
-
+         Resource: "arn:aws:dynamodb:${aws:region}:*:table/${self:provider.environment.DYNAMODB_TABLE}"
 
 functions:
   api:
@@ -23,7 +29,38 @@ functions:
     events:
      - http:
          method: any
+         path: /
+     - http:
+         method: any
          path: /{proxy+}
 
+
+
 plugins:
+ - serverless-dynamodb
  - serverless-offline
+
+custom:
+  serverless-dynamodb:
+    start:
+     port: 8000
+     inMemory: true
+     migrate: true
+
+resources:
+  Resources:
+    EvolusTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.DYNAMODB_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+         - AttributeName: PK
+           AttributeType: S
+         - AttributeName: SK
+           AttributeType: S
+        KeySchema:
+         - AttributeName: PK
+           KeyType: HASH
+         - AttributeName: SK
+           KeyType: RANGE

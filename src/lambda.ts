@@ -1,17 +1,20 @@
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
-import configure from "@vendia/serverless-express";
+import serverlessHttp from "serverless-http";
 
 let cachedServer: any;
 
-export const handler = async(event:any, context:any, callback:any) => {
+export const handler = async(event:any, context:any) => {
     if(!cachedServer){
         const nestApp = await NestFactory.create(AppModule);
         await nestApp.init();
 
         const expressApp = nestApp.getHttpAdapter().getInstance();
-        cachedServer = configure({app: expressApp})
+        cachedServer = serverlessHttp(expressApp);
     }
 
-    return cachedServer(event, context, callback);
+    event.path = event.path || '/';
+    event.requestPath = event.requestPath || event.path;
+
+    return cachedServer(event, context);
 }

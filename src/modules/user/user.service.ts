@@ -1,17 +1,26 @@
 import { Injectable } from "@nestjs/common";
 import { CreateUserDto } from "./dto/create-user.dto";
+import { DynamoService } from "../../aws/dynamo.service";
+import { v4 as uuidv4 } from "uuid";
 
 @Injectable()
 export class UserService {
-    private users: (CreateUserDto & { id: number })[] = [];
+    constructor(private readonly dynamoService: DynamoService) { }
 
-    create(CreateUserDto: CreateUserDto) {
-        const newUser = {id: Date.now(), ...CreateUserDto};
-        this.users.push(newUser);
-        return newUser;
+    async create(createUserDto: CreateUserDto) {
+        const newUser = {
+            id: uuidv4(),
+            ...createUserDto,
+            createdAt: new Date().toISOString(),
+        };
+        return this.dynamoService.putUser(newUser);
     }
 
-    findAll(){
-        return this.users;
+    async findOne(id: string) {
+        return this.dynamoService.getUser(id)
+    }
+
+    async findAll() {
+        return this.dynamoService.getAllUsers();
     }
 }
