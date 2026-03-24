@@ -1,12 +1,11 @@
 import { Module } from "@nestjs/common";
 import { UserService } from "./user.service";
-import { UserController } from "./user.controller";
 import { DynamoService } from "../../aws/dynamo.service";
+import { UserResolver } from "./user.resolver";
 
 @Module({
     imports:[],
-    controllers:[UserController],
-    providers:[UserService, DynamoService]
+    providers:[UserService, DynamoService, UserResolver]
 })
 
 export class UserModule {}
