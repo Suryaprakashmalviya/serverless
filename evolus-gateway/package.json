@@ -1,0 +1,14 @@
+{
+  "name": "evolus-gateway",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@apollo/gateway": "^2.13.3",
+    "@apollo/server": "^5.4.0",
+    "graphql": "^16.13.1"
+  }
+}
