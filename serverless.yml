@@ -1,66 +1,129 @@
 service: evolus-user-service
 
-provider: 
+provider:
   name: aws
   runtime: nodejs20.x
   region: us-east-1
   environment:
     NODE_ENV: local
     DYNAMODB_TABLE: EvolusTable
+    # ── S3 ────────────────────────────────────────────────────────────────────
+    S3_PROFILE_BUCKET: evolus-user-profiles
+    S3_ENDPOINT: http://localhost:4566
+    # ── SNS ──────────────────────────────────────────────────────────────────
+    USER_CREATED_SNS_TOPIC_ARN: arn:aws:sns:us-east-1:123456789012:UserCreatedTopic
+    SNS_ENDPOINT: http://localhost:4002
+    # ── SQS ──────────────────────────────────────────────────────────────────
+    SQS_WELCOME_EMAIL_QUEUE_URL: http://localhost:9324/000000000000/WelcomeEmailQueue
+    # ── Secrets Manager ──────────────────────────────────────────────────────
+    AWS_SECRET_NAME: Prod/BigCommerce/WebhookSecret
+    BC_WEBHOOK_SECRET: local-dev-bc-secret-placeholder # used when IS_OFFLINE=true
+
   iam:
     role:
       statements:
-       - Effect: 'Allow'
-         Action:
-          - dynamodb:Query
-          - dynamodb:Scan
-          - dynamodb:GetItem
-          - dynamodb:PutItem
-          - dynamodb:UpdateItem
-          - dynamodb:DeleteItem
-          - 'logs:CreateLogGroup'
-          - 'logs:CreateLogStream'
-          - 'logs:PutLogEvents'
-         Resource: "arn:aws:dynamodb:${aws:region}:*:table/${self:provider.environment.DYNAMODB_TABLE}"
+        - Effect: 'Allow'
+          Action:
+            # DynamoDB
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            # S3
+            - s3:PutObject
+            - s3:GetObject
+            # SNS
+            - sns:Publish
+            # SQS
+            - sqs:SendMessage
+            - sqs:ReceiveMessage
+            - sqs:DeleteMessage
+            # Secrets Manager
+            - secretsmanager:GetSecretValue
+            # CloudWatch Logs
+            - 'logs:CreateLogGroup'
+            - 'logs:CreateLogStream'
+            - 'logs:PutLogEvents'
+          Resource: "*"
 
 functions:
   api:
     handler: dist/lambda.handler
     events:
-     - http:
-         method: any
-         path: /
-     - http:
-         method: any
-         path: /{proxy+}
-
-
+      - http:
+          method: any
+          path: /
+      - http:
+          method: any
+          path: /{proxy+}
 
 plugins:
- - serverless-dynamodb
- - serverless-offline
+  - serverless-dynamodb
+  - serverless-offline-sns
+  - serverless-offline-sqs
+  - serverless-offline
 
 custom:
+  # ── DynamoDB Local ────────────────────────────────────────────────────────
   serverless-dynamodb:
     start:
-     port: 8000
-     inMemory: true
-     migrate: true
+      port: 8000
+      inMemory: true
+      migrate: true
+
+  # ── SNS Local (serverless-offline-sns) ───────────────────────────────────
+  serverless-offline-sns:
+    port: 4002
+    debug: true
+    accountId: "123456789012"
+
+  # ── SQS Local (serverless-offline-sqs via ElasticMQ) ─────────────────────
+  serverless-offline-sqs:
+    autoCreate: true
+    apiVersion: "2012-11-05"
+    endpoint: http://localhost:9324
+    region: us-east-1
+    accountId: "000000000000"
+    skipCacheInvalidation: false
 
 resources:
   Resources:
+
+    # ── DynamoDB ─────────────────────────────────────────────────────────────
     EvolusTable:
       Type: AWS::DynamoDB::Table
       Properties:
         TableName: ${self:provider.environment.DYNAMODB_TABLE}
         BillingMode: PAY_PER_REQUEST
         AttributeDefinitions:
-         - AttributeName: PK
-           AttributeType: S
-         - AttributeName: SK
-           AttributeType: S
+          - AttributeName: PK
+            AttributeType: S
+          - AttributeName: SK
+            AttributeType: S
         KeySchema:
-         - AttributeName: PK
-           KeyType: HASH
-         - AttributeName: SK
-           KeyType: RANGE
+          - AttributeName: PK
+            KeyType: HASH
+          - AttributeName: SK
+            KeyType: RANGE
+
+    # ── SNS Topic — published to when a user is created ──────────────────────
+    UserCreatedTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: UserCreatedTopic
+
+    # ── SQS Queue — email-service subscribes to this ─────────────────────────
+    WelcomeEmailQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: WelcomeEmailQueue
+
+    # ── SNS Subscription — routes UserCreatedTopic → WelcomeEmailQueue ───────
+    WelcomeEmailQueueSubscription:
+      Type: AWS::SNS::Subscription
+      Properties:
+        TopicArn: !Ref UserCreatedTopic
+        Protocol: sqs
+        Endpoint: !GetAtt WelcomeEmailQueue.Arn

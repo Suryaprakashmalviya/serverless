@@ -12,6 +12,9 @@ export class User {
 
     @Field({ description: 'User Email' })
     email: string;
+
+    @Field({ description: 'S3 URL of the user profile picture', nullable: true })
+    profilePictureUrl?: string;
 }
 
 @InputType()
